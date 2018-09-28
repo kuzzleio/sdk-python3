@@ -67,14 +67,7 @@ python: CC = $(CPP)
 python: CFLAGS = -fPIC
 python: makedir make_c_sdk remove_so swig $(OBJS) make_lib
 	cp setup.py $(OUTDIR)
-	#mv kcore_wrap.* $(OUTDIR)
 	python3 $(OUTDIR)/setup.py build_ext -I.$(PATHSEP)sdk-cpp$(PATHSEP)include -I.$(PATHSEP)sdk-cpp$(PATHSEP)sdk-c$(PATHSEP)include$(PATHSEP) -I.$(PATHSEP)sdk-cpp$(PATHSEP)src -I.$(PATHSEP)sdk-cpp$(PATHSEP)sdk-c$(PATHSEP)build$(PATHSEP) -l kuzzlesdk -b $(OUTDIR) -t $(OUTDIR)/tmp
-	# cp $(ROOT_DIR)templates/python/*.py $(OUTDIR)
-	# cp $(ROOT_DIR)$(SRCS) $(OUTDIR)/
-	# cp $(ROOT_DIR)kcore_wrap.h $(OUTDIR)/
-	# python3 $(OUTDIR)/setup.py build_ext -I $(HEADERSDIR):$(CPPDIR):$(OUTDIR):$(GOTARGETDIR):$(OUTDIR)/templates/python -L $(OUTDIR):$(GOTARGETDIR) -R $(GOTARGETDIR) -l kuzzlesdk  -b $(OUTDIR) -t $(OUTDIR)/tmp
-	# cp -p $(GOTARGET) $(OUTDIR)
-	# cp -p $(GOTARGETSO) $(OUTDIR)
 
 clean:
 	cd sdk-cpp && $(MAKE) clean
