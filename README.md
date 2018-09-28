@@ -20,7 +20,7 @@ The Python SDK implements the websocket protocol.
 Execute the following snippet to clone the GIT repository, and build the SDK. It will then be available in the "build/" directory
 
 ```sh
-git clone --recursive git@github.com:kuzzleio/sdk-python.git
+git clone --recursive git@github.com:kuzzleio/sdk-python3.git
 git submodule update --init --recursive
 cd sdk-python
 make
