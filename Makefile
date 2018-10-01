@@ -61,11 +61,15 @@ make_lib:
 remove_so:
 	rm -rf .$(PATHSEP)sdk-cpp$(PATHSEP)sdk-c$(PATHSEP)build$(PATHSEP)*.so*
 
+cp_so:
+	cp sdk-cpp/sdk-c/build/libkuzzlesdk.so.* build/
+	cp sdk-cpp/sdk-c/build/libkuzzlesdk.so build/
+
 python: LANGINCLUDE = $(PYTHONINCLUDE)
 python: OUTDIR = $(ROOTOUTDIR)
 python: CC = $(CPP)
 python: CFLAGS = -fPIC
-python: makedir make_c_sdk remove_so swig $(OBJS) make_lib
+python: remove_so makedir make_c_sdk swig $(OBJS) make_lib cp_so
 	cp setup.py $(OUTDIR)
 	python3 $(OUTDIR)/setup.py build_ext -I.$(PATHSEP)sdk-cpp$(PATHSEP)include -I.$(PATHSEP)sdk-cpp$(PATHSEP)sdk-c$(PATHSEP)include$(PATHSEP) -I.$(PATHSEP)sdk-cpp$(PATHSEP)src -I.$(PATHSEP)sdk-cpp$(PATHSEP)sdk-c$(PATHSEP)build$(PATHSEP) -l kuzzlesdk -b $(OUTDIR) -t $(OUTDIR)/tmp
 
