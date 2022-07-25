@@ -23,6 +23,5 @@ Execute the following snippet to clone the GIT repository, and build the SDK. It
 git clone --recursive git@github.com:kuzzleio/sdk-python3.git
 git submodule update --init --recursive
 cd sdk-python3
-make
 ```
 
