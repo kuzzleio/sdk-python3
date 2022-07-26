@@ -5,7 +5,6 @@ import websockets
 import asyncio
 import logging
 import json
-import time
 import sys
 
 from .ProtocolState import ProtocolState
@@ -13,7 +12,7 @@ from .ProtocolState import ProtocolState
 
 @define
 class WebSocket:
-    LOG = logging.getLogger("Kuzzle-IoT")
+    LOG = logging.getLogger("Kuzzle-WebSocket")
     state: ProtocolState = field(init=False, default=ProtocolState.CLOSE)
     event_loop: object = field(init=False, default=None)
     ws: any = field(init=False, default=None)
@@ -39,23 +38,9 @@ class WebSocket:
             self.LOG.critical(e)
             return
         self.LOG.info("<Connected to %s>", self.url)
-        self.__run_loop_start()
-
-    def __connect(self) -> any:
-        return self.event_loop.create_task(self.__connect_task())
-
-    def connect(self) -> any:
-        if self.state == ProtocolState.OPEN:
-            self.LOG.warning("<Already connected>")
-            return
-        self.event_loop = asyncio.get_event_loop()
-        assert self.event_loop, "No event loop found"
-        return self.__connect()
-
-    def __run_loop_start(self):
         self.event_loop.create_task(self.__run_loop_task())
 
-    async def __run_loop_task(self):
+    async def __run_loop_task(self) -> None:
         while True:
             self.LOG.debug("<<Waiting for data from Kuzzle...>>")
             try:
@@ -67,11 +52,11 @@ class WebSocket:
                 if not self.__autoReconnect or self.__retry > self.__reconnectionRetries:
                     return
                 self.LOG.info(f"reconnecting in {self.__reconnectionDelay}ms...")
-                time.sleep(self.__reconnectionDelay / 1000)
+                await asyncio.sleep(self.__reconnectionDelay / 1000)
                 try:
                     self.ws = await websockets.connect(self.url)
                     self.LOG.debug("Re subscribing to own state...")
-                    self.subscribe_state(self.on_state_changed)
+                    self.state = ProtocolState.OPEN
                 except Exception as e:
                     self.LOG.critical(e)
                 continue
@@ -87,21 +72,37 @@ class WebSocket:
                 continue
             except Exception as e:
                 self.LOG.error("__publish_state_task: ws except: %s", str(e))
-
+            if not resp:
+                continue
             self.LOG.debug("<<Received data from Kuzzle...>>")
-            resp = json.loads(resp)
-            print(json.dumps(resp, indent=2, sort_keys=True))
+            print(resp)
 
-    async def __post_query_task(self, query: dict, cb: callable = None):
-        self.LOG.debug("<<Posting query>>")
+    async def __post_query_task(self, query: dict, parent: str) -> None:
+        self.LOG.debug(f"<<{parent}: Posting query>>")
         await self.ws.send(json.dumps(query))
-        if cb:
-            cb()
-        self.LOG.debug("<<Query posted>>")
+        self.LOG.debug(f"<<{parent}: Query posted>>")
 
-    def post_query(self, query: dict, cb: callable = None):
+    def subscribe_realtime(self, index: str, collection: str):
+        query = {"action": "subscribe", "index": index, "collection": collection, "controller": "realtime", "query": {"match_all": {}}}
+        return self.event_loop.create_task(self.__post_query_task(query, "subscribe_realtime"))
+
+    def post_query(self, query: dict):
         self.LOG.debug("<<Adding task to post a query>>")
-        return self.event_loop.create_task(self.__post_query_task(query, cb))
+        return self.event_loop.create_task(self.__post_query_task(query, "post_query"))
+
+    def connect(self) -> any:
+        if self.state == ProtocolState.OPEN:
+            self.LOG.warning("<Already connected>")
+            return
+        self.event_loop = asyncio.get_event_loop()
+        assert self.event_loop, "No event loop found"
+        return self.event_loop.create_task(self.__connect_task())
+
+    def disconnect(self):
+        self.LOG.debug("<<Disconnecting>>")
+        self.ws.close()
+        self.state = ProtocolState.CLOSE
+        self.LOG.debug("<<Disconnected>>")
 
     @property
     def url(self) -> str:
