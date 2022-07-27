@@ -12,6 +12,7 @@ from sdkPython import WebSocket
 
 async def main():
     websockets: WebSocket = WebSocket("localhost")
+    websockets.debug(True)
     await websockets.connect()
     websockets.subscribe_realtime("index_test", "collect_test")
     websockets.post_query({"index": "index_test", "collection": "collect_test", "controller": "document", "action": "create", "body": {"age": "23", "name": "John"}})

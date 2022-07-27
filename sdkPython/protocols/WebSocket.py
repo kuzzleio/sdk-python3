@@ -15,11 +15,12 @@ from .ProtocolState import ProtocolState
 @define
 class WebSocket:
     LOG = logging.getLogger("Kuzzle-WebSocket")
+
     state: ProtocolState = field(init=False, default=ProtocolState.CLOSE)
     event_loop: AbstractEventLoop = field(init=False, default=None)
     ws: any = field(init=False, default=None)
     __retry: int = field(init=False, default=0)
-    __timeout: float = field(init=False, default=60, validator=vd.instance_of(int))
+    __timeout: float = field(init=False, default=60)
 
     __host: str = field()
     __port: int = field(default=7512, validator=vd.instance_of(int))
@@ -30,6 +31,7 @@ class WebSocket:
 
     def __attrs_post_init__(self):
         coloredlogs.install(logger=WebSocket.LOG, fmt="[%(asctime)s] - %(levelname)s - %(message)s", level=logging.DEBUG, stream=sys.stdout)
+        self.LOG.disabled = True
 
     async def __connect_task(self) -> None:
         self.LOG.debug("<Connecting.... url = %s>", self.url)
@@ -49,7 +51,7 @@ class WebSocket:
             resp_json: dict = {}
             self.LOG.debug("<<Waiting for data from Kuzzle...>>")
             try:
-                resp_str = await asyncio.wait_for(self.ws.recv(), timeout=60)
+                resp_str = await asyncio.wait_for(self.ws.recv(), timeout=self.__timeout)
                 resp_json = json.loads(resp_str)
                 self.LOG.debug("<<Received data from Kuzzle>>")
             except wse.ConnectionClosed as e:
@@ -68,10 +70,8 @@ class WebSocket:
                 continue
             except asyncio.TimeoutError:
                 try:
-                    self.LOG.info("PING Kuzzle")
                     pong_waiter = await self.ws.ping()
                     await asyncio.wait_for(pong_waiter, timeout=self.__timeout)
-                    self.LOG.info("PONG Kuzzle")
                 except asyncio.TimeoutError:
                     self.LOG.critical("No PONG from Kuzzle")
                     break
@@ -110,6 +110,9 @@ class WebSocket:
         self.ws.close()
         self.state = ProtocolState.CLOSE
         self.LOG.debug("<<Disconnected>>")
+
+    def debug(self, state: bool) -> None:
+        self.LOG.disabled = not state
 
     @property
     def url(self) -> str:
