@@ -1,4 +1,6 @@
 from attrs import define, field, validators as vd
+from asyncio import AbstractEventLoop
+
 import websockets.exceptions as wse
 import coloredlogs
 import websockets
@@ -14,9 +16,10 @@ from .ProtocolState import ProtocolState
 class WebSocket:
     LOG = logging.getLogger("Kuzzle-WebSocket")
     state: ProtocolState = field(init=False, default=ProtocolState.CLOSE)
-    event_loop: object = field(init=False, default=None)
+    event_loop: AbstractEventLoop = field(init=False, default=None)
     ws: any = field(init=False, default=None)
     __retry: int = field(init=False, default=0)
+    __timeout: float = field(init=False, default=60, validator=vd.instance_of(int))
 
     __host: str = field()
     __port: int = field(default=7512, validator=vd.instance_of(int))
@@ -26,7 +29,7 @@ class WebSocket:
     __reconnectionRetries: int = field(default=60, validator=vd.instance_of(int))
 
     def __attrs_post_init__(self):
-        coloredlogs.install(logger=WebSocket.LOG, fmt="[%(thread)X] - %(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.DEBUG, stream=sys.stdout)
+        coloredlogs.install(logger=WebSocket.LOG, fmt="[%(asctime)s] - %(levelname)s - %(message)s", level=logging.DEBUG, stream=sys.stdout)
 
     async def __connect_task(self) -> None:
         self.LOG.debug("<Connecting.... url = %s>", self.url)
@@ -42,9 +45,12 @@ class WebSocket:
 
     async def __run_loop_task(self) -> None:
         while True:
+            resp_str: str = ""
+            resp_json: dict = {}
             self.LOG.debug("<<Waiting for data from Kuzzle...>>")
             try:
-                resp = await asyncio.wait_for(self.ws.recv(), timeout=60)
+                resp_str = await asyncio.wait_for(self.ws.recv(), timeout=60)
+                resp_json = json.loads(resp_str)
                 self.LOG.debug("<<Received data from Kuzzle>>")
             except wse.ConnectionClosed as e:
                 self.LOG.error("__publish_state_task: ws disconnection: %s", str(e))
@@ -64,7 +70,7 @@ class WebSocket:
                 try:
                     self.LOG.info("PING Kuzzle")
                     pong_waiter = await self.ws.ping()
-                    await asyncio.wait_for(pong_waiter, timeout=10)
+                    await asyncio.wait_for(pong_waiter, timeout=self.__timeout)
                     self.LOG.info("PONG Kuzzle")
                 except asyncio.TimeoutError:
                     self.LOG.critical("No PONG from Kuzzle")
@@ -72,22 +78,22 @@ class WebSocket:
                 continue
             except Exception as e:
                 self.LOG.error("__publish_state_task: ws except: %s", str(e))
-            if not resp:
-                continue
-            self.LOG.debug("<<Received data from Kuzzle...>>")
-            print(resp)
+            self.LOG.info(f"\x1b[33m[ℹ️] New notification triggered by API action \"{resp_json['controller']}:{resp_json['action']}\"\x1b[0m")
+            print(json.dumps(resp_json["result"], indent=4, sort_keys=True, ensure_ascii=False))
 
     async def __post_query_task(self, query: dict, parent: str) -> None:
+        if self.state != ProtocolState.OPEN:
+            self.LOG.error("<Not connected>")
+            return
         self.LOG.debug(f"<<{parent}: Posting query>>")
         await self.ws.send(json.dumps(query))
         self.LOG.debug(f"<<{parent}: Query posted>>")
 
-    def subscribe_realtime(self, index: str, collection: str):
-        query = {"action": "subscribe", "index": index, "collection": collection, "controller": "realtime", "query": {"match_all": {}}}
+    def subscribe_realtime(self, index: str, collection: str, body: dict = None) -> any:
+        query: dict = {"action": "subscribe", "index": index, "collection": collection, "controller": "realtime", "body": body or {}}
         return self.event_loop.create_task(self.__post_query_task(query, "subscribe_realtime"))
 
     def post_query(self, query: dict):
-        self.LOG.debug("<<Adding task to post a query>>")
         return self.event_loop.create_task(self.__post_query_task(query, "post_query"))
 
     def connect(self) -> any:
@@ -95,11 +101,12 @@ class WebSocket:
             self.LOG.warning("<Already connected>")
             return
         self.event_loop = asyncio.get_event_loop()
+        self.event_loop.set_debug(True)
         assert self.event_loop, "No event loop found"
         return self.event_loop.create_task(self.__connect_task())
 
-    def disconnect(self):
-        self.LOG.debug("<<Disconnecting>>")
+    def disconnect(self) -> None:
+        self.LOG.debug("<<Disconnecting...>>")
         self.ws.close()
         self.state = ProtocolState.CLOSE
         self.LOG.debug("<<Disconnected>>")

@@ -13,8 +13,10 @@ from sdkPython import WebSocket
 async def main():
     websockets: WebSocket = WebSocket("localhost")
     await websockets.connect()
-    websockets.subscribe_realtime("from_python_1", "perso")
-    websockets.post_query({"index": "from_python_1", "collection": "perso", "controller": "document", "action": "create", "body": {"name": "test", "age": "test"}})
+    websockets.subscribe_realtime("index_test", "collect_test")
+    websockets.post_query({"index": "index_test", "collection": "collect_test", "controller": "document", "action": "create", "body": {"age": "23", "name": "John"}})
+    while True:
+        await asyncio.sleep(.1)
 
 
 asyncio.run(main())
